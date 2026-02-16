@@ -25,14 +25,18 @@ mandelbrot/
 ├── index.html          # Webインターフェース
 ├── main.js             # JavaScript エントリーポイント
 ├── Cargo.toml          # Rust プロジェクト設定
-└── pkg/                # ビルドされた WASM パッケージ
+├── package.json        # npm プロジェクト設定
+├── vite.config.js      # Vite 設定
+├── pkg/                # ビルドされた WASM パッケージ
+└── dist/               # 本番ビルド出力
 ```
 
 ## 必要な環境
 
 - Rust (2024 edition)
 - wasm-pack
-- Node.js (開発サーバー用)
+- Node.js (v18 以上)
+- cargo-watch (開発時の自動リビルド用、オプション)
 
 ## セットアップ
 
@@ -46,24 +50,43 @@ mandelbrot/
    cargo install wasm-pack
    ```
 
-3. **プロジェクトのビルド**
+3. **cargo-watch のインストール**（オプション）
    ```bash
-   wasm-pack build --target web
+   cargo install cargo-watch
+   ```
+
+4. **依存パッケージのインストール**
+   ```bash
+   npm install
    ```
 
 ## 実行方法
 
-ローカルサーバーを起動してブラウザで開きます：
+### 開発モード
+
+WASM のビルドと Vite 開発サーバーを同時に起動します：
 
 ```bash
-# Python を使用する場合
-python3 -m http.server 8080
-
-# Node.js の http-server を使用する場合
-npx http-server -p 8080
+npm run dev
 ```
 
-ブラウザで `http://localhost:8080` を開いてください。
+ブラウザで `http://localhost:5173/mandelbrot/` を開いてください。
+
+### 本番ビルド
+
+```bash
+npm run build
+```
+
+ビルド結果は `dist/` ディレクトリに出力されます。
+
+### プレビュー
+
+本番ビルドをローカルで確認：
+
+```bash
+npm run preview
+```
 
 ## 使い方
 
