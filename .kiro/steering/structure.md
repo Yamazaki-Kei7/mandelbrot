@@ -10,13 +10,25 @@
 **Purpose**: マンデルブロ集合の計算コアとWasmエクスポート関数
 **Pattern**: `lib.rs` にWasmエントリーポイント、モジュール分割は機能単位
 
-### Web Frontend (`www/` or project root)
+### Web Frontend (project root)
 **Purpose**: HTMLページ、JavaScript グルーコード、スタイル
-**Pattern**: Wasmモジュールのロードと Canvas描画のブリッジ
+**Pattern**: `index.html` + `main.js` でWasmモジュールをロードしCanvas描画をブリッジ
 
 ### Wasm Build Output (`pkg/`)
 **Purpose**: wasm-packが生成するWasmバイナリとJSバインディング
 **Pattern**: 自動生成、バージョン管理対象外
+
+### Production Build Output (`dist/`)
+**Purpose**: Viteがバンドルした最終成果物 (GitHub Pages配信用)
+**Pattern**: `npm run build` で生成、自動生成のためバージョン管理対象外
+
+### Configuration (project root)
+**Purpose**: ビルドツール設定
+**Pattern**: `vite.config.js`, `package.json`, `Cargo.toml` がプロジェクトルートに配置
+
+### CI/CD (`.github/workflows/`)
+**Purpose**: GitHub Actionsによるビルド・デプロイ自動化
+**Pattern**: `master` pushトリガーでWasm + Viteビルド → GitHub Pages デプロイ
 
 ## Naming Conventions
 
@@ -51,4 +63,4 @@ pub use renderer::*;
 
 ---
 _Document patterns, not file trees. New files following patterns shouldn't require updates_
-_updated_at: 2026-02-16 — モジュール構成を実装に合わせて更新 (4モジュール構成)_
+_updated_at: 2026-02-16 — dist/、CI/CD、設定ファイルパターンを追加。www/ → project rootに修正_
