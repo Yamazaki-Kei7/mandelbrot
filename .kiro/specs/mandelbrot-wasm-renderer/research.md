@@ -8,9 +8,10 @@
 - **Feature**: `mandelbrot-wasm-renderer`
 - **Discovery Scope**: New Feature（グリーンフィールド）
 - **Key Findings**:
-  - wasm-bindgen 0.2.108 + wasm-pack 0.14.0 が最新安定版。`Clamped(&[u8])` によるImageData一括描画が推奨パターン
-  - Rust Edition 2024 では `static mut` 参照がdeny-by-defaultとなり、ピクセルバッファはVec<u8>を構造体で管理する設計が必須
-  - 非ブロッキング描画は `requestAnimationFrame` + Rc/RefCellパターンで実現。Web Worker + OffscreenCanvasはスコープ外とする
+  - wasm-bindgen 0.2.108 + wasm-pack 0.14.0 が最新安定版。公式Julia Setサンプルの `&mut [u8]` 直接書き込みパターンを採用
+  - Rust Edition 2024 では `static mut` 参照がdeny-by-defaultとなり、ピクセルバッファは構造体で管理する設計が必須
+  - Cargo.toml に `[lib] crate-type = ["cdylib", "rlib"]` が必須（Context7検証で確認）
+  - 非ブロッキング描画は `requestAnimationFrame` パターンで実現。Web Worker + OffscreenCanvasはスコープ外とする
 
 ## Research Log
 
@@ -22,7 +23,40 @@
   - `put_image_data` でCanvasに転送。部分更新は `put_image_data_with_dirty_*` で対応可能
   - web-sys feature flags: `CanvasRenderingContext2d`, `Document`, `Element`, `HtmlCanvasElement`, `Window`, `ImageData` が必要
   - `JsCast::dyn_into::<T>()` による型キャストが必須
-- **Implications**: Rendererは `Vec<u8>` バッファを構造体で保持し、フレーム単位で `put_image_data` する設計とする
+- **Implications**: 初期調査ではRust側ImageData生成を想定していたが、Context7検証で公式Julia Setパターンに変更（後述）
+
+### Context7検証: wasm-bindgen公式Julia Setサンプル
+- **Context**: Context7 MCPで取得したwasm-bindgen公式Julia Setフラクタルサンプルとの設計整合性検証
+- **Sources Consulted**: Context7 `/rustwasm/wasm-bindgen` (736 snippets, High reputation)
+- **Findings**:
+  - 公式Julia Setサンプルでは **JS側がImageDataを作成し、`&mut [u8]` としてRustに渡す**方式を採用
+  - Rust側は `pub fn render(data: &mut [u8]) -> usize` で直接バッファに書き込み
+  - JS側: `ctx.createImageData()` → `Uint8ClampedArray` ビュー作成 → Rust呼び出し → `ctx.putImageData()`
+  - wasm-bindgenが `&mut [u8]` と `Uint8ClampedArray` の自動変換をサポート
+  - ただし公式サンプルは `static mut WIDTH/HEIGHT` を使用しており、Edition 2024では非互換
+- **Implications**: JS-creates-buffer パターンを採用。`static mut` 部分は構造体ベースに置き換え
+
+### Context7検証: Cargo.toml構成
+- **Context**: wasm-packで正常にビルドするために必要なCargo.toml設定の確認
+- **Sources Consulted**: Context7 `/drager/wasm-pack` (93 snippets, High reputation)
+- **Findings**:
+  - `[lib] crate-type = ["cdylib"]` が**必須**。これがないとwasm-packがWasmバイナリを生成できない
+  - `rlib` を追加すると `cargo test` でのユニットテストも動作する
+  - `console_error_panic_hook` が標準的なオプション依存として推奨
+  - `wee_alloc`（サイズ最適化アロケータ）は現在非推奨傾向のため不採用
+  - エントリーポイントは `src/lib.rs` であることが前提（`src/main.rs` ではない）
+- **Implications**: Cargo.tomlに `[lib]` セクション追加、`src/main.rs` → `src/lib.rs` への変更がタスクに必要
+
+### Context7検証: 構造体エクスポートパターン
+- **Context**: `#[wasm_bindgen]` による構造体とメソッドのJSエクスポートの正確なパターン確認
+- **Sources Consulted**: Context7 `/rustwasm/wasm-bindgen`
+- **Findings**:
+  - `#[wasm_bindgen]` を struct と impl ブロック両方に付与
+  - `#[wasm_bindgen(constructor)]` でJS側の `new` 演算子対応
+  - private フィールドはJSから不可視（設計通り）
+  - `&mut self` メソッドは正常に動作（Rendererのrender/zoom/panに適用可能）
+  - `pub` フィールドは自動的にgetter/setterが生成される
+- **Implications**: 設計のRenderer構造体パターンはContext7で確認済み。変更不要
 
 ### Rust Edition 2024 と Wasm
 - **Context**: Edition 2024固有の変更がWasmビルドに与える影響の確認
@@ -63,15 +97,27 @@
 
 ## Design Decisions
 
-### Decision: ピクセルバッファ管理方式
+### Decision: ピクセルバッファ受け渡し方式
 - **Context**: Wasm側で計算したピクセルデータをCanvasに転送する方式の選択
 - **Alternatives Considered**:
   1. `static mut` グローバルバッファ + ポインタ公開 — WasmByExampleの古いパターン
-  2. `Vec<u8>` を構造体フィールドで管理 + `ImageData` API — web-sys推奨パターン
-- **Selected Approach**: Option 2（構造体管理 + ImageData API）
-- **Rationale**: Rust 2024 で `static mut` 参照がdeny-by-default。構造体管理の方が型安全で、バッファのライフタイムが明確
-- **Trade-offs**: フレーム毎にImageDataオブジェクトを生成するオーバーヘッドがあるが、バッファ自体は再利用するため軽微
+  2. Rust側で `ImageData` を生成し `put_image_data` を呼ぶ — web-sys依存パターン
+  3. JS側が `ImageData` を作成し `&mut [u8]` としてRustに渡す — wasm-bindgen公式Julia Setパターン
+- **Selected Approach**: Option 3（JS-creates-buffer パターン）
+- **Rationale**:
+  - wasm-bindgen公式フラクタル描画サンプル（Julia Set）と同一パターンで信頼性が高い（Context7検証済み）
+  - Rust側がweb-sysの `ImageData` APIに依存しなくなり、コードがシンプルになる
+  - `&mut [u8]` はwasm-bindgenが `Uint8ClampedArray` と自動変換するため、追加コード不要
+  - Rust 2024で `static mut` 参照がdeny-by-defaultのため Option 1 は不可
+  - Option 2 はweb-sys依存が増え、Rust側のテストが複雑化する
+- **Trade-offs**: JS側に `createImageData` / `putImageData` の責務が増えるが、数行のコードで済む
 - **Follow-up**: 大きなキャンバスサイズでのパフォーマンス測定
+
+### Decision: Cargo.toml構成
+- **Context**: wasm-packで正常にビルドするための必須設定
+- **Selected Approach**: `[lib] crate-type = ["cdylib", "rlib"]` を設定し、エントリーポイントを `src/lib.rs` に変更
+- **Rationale**: `cdylib` はwasm-packによるWasmバイナリ生成に必須（Context7検証済み）。`rlib` は `cargo test` でのユニットテスト実行に必要
+- **Follow-up**: `src/main.rs` を `src/lib.rs` に置き換えるタスクが必要
 
 ### Decision: フロントエンドアーキテクチャ
 - **Context**: フロントエンドフレームワーク使用の要否
@@ -93,15 +139,24 @@
 - **Trade-offs**: 非常に高解像度や深いズームでは一時的にフレームドロップの可能性
 - **Follow-up**: プロファイリングで16ms超過が確認された場合、チャンク分割を導入
 
+### Decision: デバッグ支援
+- **Context**: Wasmパニック時のエラー出力改善
+- **Selected Approach**: `console_error_panic_hook` を optional dependency として追加
+- **Rationale**: wasm-packテンプレートで標準的に含まれており、パニック時にブラウザコンソールに詳細なスタックトレースを出力する。開発効率が大幅に向上する（Context7検証済み）
+
 ## Risks & Mitigations
 - **深いズームでの精度不足（f64）** — f64の精度限界（約1e-15）を超えるズームでは描画がブロック化する。初期スコープでは対応不要、将来的に任意精度ライブラリを検討
 - **ブラウザ互換性** — wasm-bindgen + web-sys は主要ブラウザ対応済み。IE非対応だが対象外
 - **大キャンバスでのパフォーマンス** — 4K解像度等ではフレーム時間が増大。初期はウィンドウサイズ依存で対応
+- **Cargo.toml構成ミス** — `[lib] crate-type` の設定漏れでwasm-packビルドが失敗するリスク。タスク化して確実に対応する
 
 ## References
 - [wasm-bindgen 0.2.108 Release](https://github.com/wasm-bindgen/wasm-bindgen/releases) — 最新バージョン確認
 - [wasm-pack 0.14.0 Release](https://github.com/rustwasm/wasm-pack/releases) — ビルドツール最新版
 - [web-sys Canvas Example](https://rustwasm.github.io/docs/wasm-bindgen/examples/2d-canvas.html) — Canvas 2D連携パターン
+- [wasm-bindgen Julia Set Example](https://github.com/rustwasm/wasm-bindgen/blob/main/guide/src/examples/julia.md) — 公式フラクタル描画サンプル（Context7で取得）
 - [Rust 1.85.0 / Edition 2024](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/) — Edition 2024の変更点
 - [requestAnimationFrame Example](https://rustwasm.github.io/docs/wasm-bindgen/examples/request-animation-frame.html) — rAFパターン
 - [MDN OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) — 将来の最適化参考
+- Context7 MCP `/rustwasm/wasm-bindgen` — 構造体エクスポート、Closureパターン、Canvas描画の検証
+- Context7 MCP `/drager/wasm-pack` — Cargo.toml構成、ビルドコマンドの検証
