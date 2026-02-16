@@ -31,12 +31,16 @@
 
 ```rust
 // Rust module pattern
-mod mandelbrot;  // 計算ロジック
-mod color;       // カラーマッピング
+mod core;       // マンデルブロ集合の計算ロジック (compute_pixel, compute_region)
+mod color;      // カラーマッピング (HSL→RGB, iteration→color変換)
+mod viewport;   // ビューポート管理 (ズーム・パン・座標変換)
+mod renderer;   // Wasmエクスポート境界 (#[wasm_bindgen] struct Renderer)
 
-// Wasm exports are marked with #[wasm_bindgen]
-#[wasm_bindgen]
-pub fn render(...) { ... }
+// lib.rs は pub use でモジュールを再エクスポート
+pub use core::*;
+pub use color::*;
+pub use viewport::*;
+pub use renderer::*;
 ```
 
 ## Code Organization Principles
@@ -47,3 +51,4 @@ pub fn render(...) { ... }
 
 ---
 _Document patterns, not file trees. New files following patterns shouldn't require updates_
+_updated_at: 2026-02-16 — モジュール構成を実装に合わせて更新 (4モジュール構成)_
