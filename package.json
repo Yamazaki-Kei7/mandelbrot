@@ -1,0 +1,20 @@
+{
+  "name": "mandelbrot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "wasm-pack build --target bundler",
+    "build:web": "vite build",
+    "build": "npm run build:wasm && npm run build:web",
+    "dev:wasm-watch": "cargo watch -w src -s \"wasm-pack build --target bundler\"",
+    "dev": "npm run build:wasm && concurrently \"npm:dev:wasm-watch\" \"vite\"",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "vite": "^6.1.0",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-plugin-wasm": "^3.4.1"
+  }
+}

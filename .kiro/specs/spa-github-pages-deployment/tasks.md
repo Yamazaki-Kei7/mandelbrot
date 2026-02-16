@@ -1,49 +1,49 @@
 # Implementation Plan
 
-- [ ] 1. プロジェクト設定とビルド基盤の構築
-- [ ] 1.1 リポジトリ初期設定とパッケージ管理
+- [x] 1. プロジェクト設定とビルド基盤の構築
+- [x] 1.1 リポジトリ初期設定とパッケージ管理
   - package.jsonを作成し、ビルドに必要な依存パッケージ（Vite、WASMプラグイン、トップレベルawaitプラグイン、プロセス並列実行ツール）をdevDependenciesとしてインストールする
   - .gitignoreにビルド成果物ディレクトリ（dist/）とNode.js依存ディレクトリ（node_modules/）を追加する
   - _Requirements: 5.1, 5.2_
 
-- [ ] 1.2 Viteビルド設定の作成
+- [x] 1.2 Viteビルド設定の作成
   - WASMプラグインとトップレベルawaitプラグインを統合し、WASMモジュールのESMインポートを有効化する
   - GitHub Pagesのサブディレクトリパスで正しく動作するベースパスを設定する
   - esnextターゲットでの本番ビルドとdist/への出力を設定する（JS最小化はViteのデフォルト動作に委ねる）
   - Vite dev serverがWASMファイルに正しいMIMEタイプを返すことを確認する
   - _Requirements: 1.2, 1.5, 2.2, 4.2_
 
-- [ ] 2. WASMビルドパイプラインの統合
-- [ ] 2.1 (P) ビルドスクリプトの設定
+- [x] 2. WASMビルドパイプラインの統合
+- [x] 2.1 (P) ビルドスクリプトの設定
   - wasm-pack（bundlerターゲット）とViteビルドを順次実行するnpmスクリプトを定義する
   - 単一コマンド（npm run build）でWASMコンパイルからフロントエンドバンドルまで完了する構成にする
   - _Requirements: 1.1, 1.3_
 
-- [ ] 2.2 (P) フロントエンドコードのbundlerターゲット対応
+- [x] 2.2 (P) フロントエンドコードのbundlerターゲット対応
   - main.jsのWASMモジュールインポートパターンをbundlerターゲット出力に適合させる
   - 既存の描画ロジック（ズーム、パン、リアルタイム描画）がそのまま動作することを維持する
   - _Requirements: 1.3, 4.4_
 
-- [ ] 3. (P) SPAエントリーポイントとローディングUIの実装
+- [x] 3. (P) SPAエントリーポイントとローディングUIの実装
   - HTMLにCSS-onlyのスピナーアニメーションを追加する（外部ライブラリ不使用、WASM未ロード時でも動作保証）
   - WASMロード中はCanvasを非表示にし、ローディングインジケーターを表示する
   - WASM初期化完了後にローディングUIを除去しCanvasを表示する状態遷移をmain.jsに実装する
   - _Requirements: 4.1, 4.3, 4.5_
 
-- [ ] 4. (P) Rust自動リビルド対応の開発サーバー構成
+- [x] 4. (P) Rust自動リビルド対応の開発サーバー構成
   - cargo-watchによるRustソースの変更監視とwasm-pack自動再実行を設定する
   - cargo-watchとVite dev serverを並列起動するdevスクリプトを構成する
   - Rustソース変更時にWASMが自動再ビルドされ、ブラウザに変更が反映される開発フローを確立する
   - _Requirements: 1.4, 2.1, 2.3_
 
-- [ ] 5. (P) GitHub Actions CI/CDパイプラインの構築
+- [x] 5. (P) GitHub Actions CI/CDパイプラインの構築
   - masterブランチへのプッシュ時にトリガーするデプロイワークフローを作成する
   - Rustツールチェーン、wasm-pack、Node.js環境の自動セットアップを構成する
   - ビルド成功時のGitHub Pages自動デプロイと、ビルド失敗時のデプロイ中止を設定する
   - GitHub Pagesに必要なパーミッション（pages: write, id-token: write）と同時実行制御を構成する
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 6. 統合検証とビルド動作確認
+- [x] 6. 統合検証とビルド動作確認
   - 本番ビルド（npm run build）を実行し、dist/にHTML、JS、WASMファイルが正しく出力されることを確認する
   - ビルド成果物をブラウザで確認し、マンデルブロ集合の描画・ズーム・パン操作が正常に機能することを検証する
   - 既存のRustユニットテスト（cargo test）が引き続きパスすることを確認する（回帰テスト）

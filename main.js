@@ -1,9 +1,11 @@
-import init, { Renderer } from './pkg/mandelbrot.js';
+import { Renderer } from './pkg/mandelbrot.js';
 
-async function run() {
-    await init();
-
+function run() {
+    // ローディングUI除去、Canvas表示
+    document.getElementById('loading').remove();
     const canvas = document.getElementById('canvas');
+    canvas.style.display = 'block';
+
     const ctx = canvas.getContext('2d');
 
     // Canvasサイズをウィンドウサイズに合わせる
